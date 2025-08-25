@@ -1,86 +1,43 @@
-name: Publish Test Report to GitHub Pages
+name: Deploy Test Report
 
 on:
-  # run it by hand, or on push; adjust to your needs
-  workflow_dispatch:
   push:
-    branches: [ main ]
-  # Or trigger after your existing CI job completes:
-  # workflow_run:
-  #   workflows: ["Run tests"]
-  #   types: [completed]
-
-# Required for Pages deploy
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Avoid overlapping Pages deployments
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+    branches:
+      - main   # Change if your default branch is different
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # 👉 Replace this with the real step that generates your HTML report.
-      - name: Build HTML report
+      - name: Generate HTML report
         run: |
-          rm -rf reports
           mkdir -p reports
           echo "<h1>Test Report</h1><p>All tests passed ✅</p>" > reports/index.html
-          # e.g. mv coverage/html/* reports/  # if your tool already outputs HTML
 
-      # Package the static site for Pages
-      - name: Upload report for Pages
-        uses: actions/upload-pages-artifact@v4
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: reports
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    permissions:
+      pages: write      # Required for GitHub Pages
+      id-token: write   # Required for OIDC auth
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
-      # Publish the artifact to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
-      # Optional: post a Teams card with a "View report" button
-      - name: Notify Teams with link
-        if: always()   # send even if tests fail; remove if you only want on success
-        env:
-          WEBHOOK: ${{ secrets.TEAMS_WEBHOOK_URL }}
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+      - name: Notify Teams with report link
         run: |
-          payload=$(cat <<'EOF'
-          {
-            "type": "message",
-            "attachments": [
-              {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                  "type": "AdaptiveCard",
-                  "version": "1.4",
-                  "body": [
-                    { "type": "TextBlock", "size": "Large", "weight": "Bolder", "text": "📄 Test Report published" },
-                    { "type": "TextBlock", "wrap": true, "text": "Click the button to view the latest HTML report." }
-                  ],
-                  "actions": [
-                    { "type": "Action.OpenUrl", "title": "View report", "url": "'"$PAGE_URL"'" }
-                  ]
-                }
-              }
-            ]
-          }
-          EOF
-          )
-          curl -sS -X POST -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK"
+          curl -H 'Content-Type: application/json' \
+          -d "{\"text\":\"✅ Test Report is ready: ${{ steps.deployment.outputs.page_url }}\"}" \
+          "https://prod-91.westus.logic.azure.com:443/workflows/3d1b0262a151447fa4af191b76e738ec/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=d3JmTZuACN80oOmIAtAYIp5HtaeBzw8R4EqQwJ9GX-Q"
