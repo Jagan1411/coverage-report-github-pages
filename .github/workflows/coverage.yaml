@@ -1,9 +1,9 @@
-name: Deploy Test Report
+name: Deploy Coverage Report to GitHub Pages
 
 on:
   push:
     branches:
-      - main   # Change if your default branch is different
+      - main
 
 jobs:
   build:
@@ -12,21 +12,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate HTML report
-        run: |
-          mkdir -p reports
-          echo "<h1>Test Report</h1><p>All tests passed ✅</p>" > reports/index.html
-
-      - name: Upload artifact
+      - name: Upload coverage report artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: reports
+          path: ./coverage-report   # adjust path to your report folder
 
   deploy:
     needs: build
     permissions:
-      pages: write      # Required for GitHub Pages
-      id-token: write   # Required for OIDC auth
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -41,3 +36,8 @@ jobs:
           curl -H 'Content-Type: application/json' \
           -d "{\"text\":\"✅ Test Report is ready: ${{ steps.deployment.outputs.page_url }}\"}" \
           "https://prod-91.westus.logic.azure.com:443/workflows/3d1b0262a151447fa4af191b76e738ec/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=d3JmTZuACN80oOmIAtAYIp5HtaeBzw8R4EqQwJ9GX-Q"
+
+
+
+      
+        
