@@ -34,6 +34,14 @@ jobs:
       - name: Notify Teams with report link
         run: |
           curl -H 'Content-Type: application/json' \
+          -d "{
+          \"@type\": \"MessageCard\",
+          \"@context\": \"http://schema.org/extensions\",
+          \"summary\": \"Test Report\",
+          \"themeColor\": \"0076D7\",
+          \"title\": \"✅ Test Report is ready\",
+          \"text\": \"[Click here to view the report](${{ steps.deployment.outputs.page_url }})\"
+          }" \
           -d "{\"text\":\"✅ Test Report is ready: ${{ steps.deployment.outputs.page_url }}\"}" \
           "https://prod-91.westus.logic.azure.com:443/workflows/3d1b0262a151447fa4af191b76e738ec/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=d3JmTZuACN80oOmIAtAYIp5HtaeBzw8R4EqQwJ9GX-Q"
 
