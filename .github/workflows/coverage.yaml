@@ -1,51 +1,86 @@
-name: run-code-coverage
+name: Publish Test Report to GitHub Pages
 
 on:
-  push:
-    branches: ["main"]
+  # run it by hand, or on push; adjust to your needs
   workflow_dispatch:
+  push:
+    branches: [ main ]
+  # Or trigger after your existing CI job completes:
+  # workflow_run:
+  #   workflows: ["Run tests"]
+  #   types: [completed]
 
+# Required for Pages deploy
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Avoid overlapping Pages deployments
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
-  run-code-coverage:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }} 
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: checkout repo
-        uses: actions/checkout@v2
-      
-      - name: setup python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+
+      # 👉 Replace this with the real step that generates your HTML report.
+      - name: Build HTML report
+        run: |
+          rm -rf reports
+          mkdir -p reports
+          echo "<h1>Test Report</h1><p>All tests passed ✅</p>" > reports/index.html
+          # e.g. mv coverage/html/* reports/  # if your tool already outputs HTML
+
+      # Package the static site for Pages
+      - name: Upload report for Pages
+        uses: actions/upload-pages-artifact@v4
         with:
-          python-version:  '3.10'
-      
-      - name: install python packages
-        run: |
-          python -m pip install --upgrade pip
-          pip install coverage
-          pip install urllib3
+          path: reports
 
-      - name: run coverage
-        run: |
-          coverage run -m test
-          coverage html --omit='.venv/*'
-
-      - name: upload artifact
-        uses: actions/upload-pages-artifact@v1
-        with: 
-          path: './htmlcov/'
-      
-      - name: deploy to Github Pages
-        uses: actions/deploy-pages@v2
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Publish the artifact to GitHub Pages
+      - name: Deploy to GitHub Pages
         id: deployment
-        
+        uses: actions/deploy-pages@v4
+
+      # Optional: post a Teams card with a "View report" button
+      - name: Notify Teams with link
+        if: always()   # send even if tests fail; remove if you only want on success
+        env:
+          WEBHOOK: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          payload=$(cat <<'EOF'
+          {
+            "type": "message",
+            "attachments": [
+              {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  "type": "AdaptiveCard",
+                  "version": "1.4",
+                  "body": [
+                    { "type": "TextBlock", "size": "Large", "weight": "Bolder", "text": "📄 Test Report published" },
+                    { "type": "TextBlock", "wrap": true, "text": "Click the button to view the latest HTML report." }
+                  ],
+                  "actions": [
+                    { "type": "Action.OpenUrl", "title": "View report", "url": "'"$PAGE_URL"'" }
+                  ]
+                }
+              }
+            ]
+          }
+          EOF
+          )
+          curl -sS -X POST -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK"
